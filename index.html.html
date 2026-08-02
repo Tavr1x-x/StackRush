@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="he" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Stack Rush</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    font-family: 'Arial Black', 'Helvetica Neue', sans-serif;
+    background: #0a0a16;
+    touch-action: manipulation;
+    user-select: none;
+  }
+  #game-container {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+  }
+  canvas { display: block; touch-action: manipulation; }
+
+  /* HUD */
+  #hud-top {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 18px 18px 0;
+    z-index: 10;
+    pointer-events: none;
+  }
+  #coins {
+    background: rgba(0,0,0,0.35);
+    border-radius: 100px;
+    padding: 8px 16px;
+    color: #ffd23f;
+    font-size: 15px;
+    font-weight: 900;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #level-badge {
+    background: rgba(0,0,0,0.35);
+    border-radius: 100px;
+    padding: 8px 16px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+  #score {
+    position: absolute;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 52px;
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.5);
+    z-index: 10;
+    transition: transform 0.15s ease;
+  }
+  #level-progress {
+    position: absolute;
+    top: 128px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 140px;
+    height: 6px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 10px;
+    overflow: hidden;
+    z-index: 10;
+  }
+  #level-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: #ffd23f;
+    transition: width 0.2s ease;
+  }
+
+  /* Overlay screens */
+  #overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 20;
+    background: rgba(8,8,20,0.82);
+    backdrop-filter: blur(6px);
+    text-align: center;
+    padding: 24px;
+  }
+  #overlay h1 {
+    font-size: 50px;
+    color: #ffd23f;
+    letter-spacing: 2px;
+    text-shadow: 0 0 24px rgba(255,210,63,0.5), 0 4px 0 #b5850a;
+    margin-bottom: 6px;
+  }
+  #overlay .sub {
+    color: rgba(255,255,255,0.75);
+    font-size: 14px;
+    font-weight: 400;
+    margin-bottom: 26px;
+    max-width: 280px;
+    line-height: 1.5;
+  }
+  #overlay .stat-row {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 26px;
+  }
+  #overlay .stat {
+    color: #fff;
+  }
+  #overlay .stat .num {
+    font-size: 26px;
+    font-weight: 900;
+    display: block;
+  }
+  #overlay .stat .lbl {
+    font-size: 11px;
+    color: rgba(255,255,255,0.55);
+    letter-spacing: 1px;
+  }
+  .btn {
+    border: none;
+    padding: 16px 46px;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    border-radius: 100px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: transform 0.08s ease;
+    color: #fff;
+    margin-bottom: 12px;
+    width: 240px;
+  }
+  .btn:active { transform: translateY(4px); }
+  #start-btn, #retry-btn {
+    background: linear-gradient(180deg, #ff6b4a, #e8452a);
+    box-shadow: 0 8px 0 #a92c17, 0 12px 24px rgba(0,0,0,0.4);
+  }
+  .btn-secondary {
+    background: linear-gradient(180deg, #38bdf8, #1a8fc9);
+    box-shadow: 0 8px 0 #10618c, 0 12px 24px rgba(0,0,0,0.3);
+    font-size: 14px;
+    padding: 12px 32px;
+  }
+  .btn-premium {
+    background: linear-gradient(180deg, #a78bfa, #7c5cf0);
+    box-shadow: 0 8px 0 #5433b0, 0 12px 24px rgba(0,0,0,0.3);
+    font-size: 14px;
+    padding: 12px 32px;
+  }
+  #combo {
+    position: absolute;
+    z-index: 15;
+    font-weight: 900;
+    color: #ffd23f;
+    text-shadow: 0 0 12px rgba(255,210,63,0.8);
+    pointer-events: none;
+    opacity: 0;
+    font-size: 22px;
+  }
+  .hidden { display: none !important; }
+
+  /* Fake ad overlay */
+  #ad-overlay {
+    position: absolute;
+    inset: 0;
+    background: #111;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    color: #fff;
+  }
+  #ad-overlay .ad-box {
+    width: 80%;
+    max-width: 320px;
+    aspect-ratio: 9/16;
+    background: linear-gradient(135deg, #2a2a40, #1a1a2e);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    border: 2px dashed rgba(255,255,255,0.2);
+  }
+  #ad-timer {
+    font-size: 14px;
+    color: rgba(255,255,255,0.6);
+    margin-top: 20px;
+  }
+  #ad-label {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    font-size: 11px;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 1px;
+  }
+
+  /* Shop overlay */
+  #shop-btn {
+    background: rgba(0,0,0,0.35);
+    border-radius: 100px;
+    padding: 8px 14px;
+    color: #fff;
+    font-size: 13px;
+    z-index: 10;
+    border: none;
+    font-family: inherit;
+    font-weight: 700;
+    pointer-events: auto;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div id="game-container">
+  <canvas id="game"></canvas>
+
+  <div id="hud-top">
+    <div id="coins">🪙 <span id="coin-count">0</span></div>
+    <button id="shop-btn">✕ מודעות</button>
+  </div>
+  <div id="score">0</div>
+  <div id="level-badge" style="position:absolute; top:104px; left:50%; transform:translateX(-50%);">שלב 1</div>
+  <div id="level-progress"><div id="level-progress-fill"></div></div>
+  <div id="combo"></div>
+
+  <div id="overlay">
+    <h1>STACK RUSH</h1>
+    <div class="sub">לחץ כדי להפיל כל קרש. פגיעה מדויקת = בונוס מטבעות ומגדל רחב יותר. כל 10 קומות = שלב חדש ומהירות עולה.</div>
+    <button id="start-btn" class="btn">התחל משחק</button>
+  </div>
+
+  <div id="ad-overlay" class="hidden">
+    <div id="ad-label">פרסומת (הדגמה)</div>
+    <div class="ad-box">
+      <div style="font-size:40px;">📺</div>
+      <div style="font-weight:900; font-size:16px;">כאן תוצג פרסומת אמיתית</div>
+      <div style="font-size:12px; color:rgba(255,255,255,0.5); padding:0 20px; text-align:center;">(מיקום עתידי ל-Google AdMob לאחר עטיפה לאפליקציה)</div>
+    </div>
+    <div id="ad-timer">סוגר בעוד 3...</div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const overlay = document.getElementById('overlay');
+  const startBtn = document.getElementById('start-btn');
+  const comboEl = document.getElementById('combo');
+  const coinCountEl = document.getElementById('coin-count');
+  const levelBadge = document.getElementById('level-badge');
+  const levelFill = document.getElementById('level-progress-fill');
+  const adOverlay = document.getElementById('ad-overlay');
+  const adTimer = document.getElementById('ad-timer');
+  const shopBtn = document.getElementById('shop-btn');
+
+  let W, H, DPR;
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W * DPR;
+    canvas.height = H * DPR;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // Persistent data (localStorage simulates future save-game / IAP state)
+  let totalCoins = parseInt(localStorage.getItem('sr_coins') || '0', 10);
+  let best = parseInt(localStorage.getItem('sr_best') || '0', 10);
+  let premium = localStorage.getItem('sr_premium') === '1';
+  coinCountEl.textContent = totalCoins;
+  if (premium) shopBtn.classList.add('hidden');
+
+  const BLOCK_H = 42;
+  const colorSets = [
+    [['#ff6b4a','#e8452a'],['#ffd23f','#e8a91a'],['#4ade80','#22a35a']],
+    [['#38bdf8','#1a8fc9'],['#a78bfa','#7c5cf0'],['#fb7185','#e0455f']],
+    [['#fbbf24','#d97706'],['#34d399','#059669'],['#f472b6','#db2777']],
+  ];
+
+  let stack, current, camY, camTargetY, speed, dir, score, running, particles, shakeT, level, runsSinceAd;
+  runsSinceAd = parseInt(localStorage.getItem('sr_runsSinceAd') || '0', 10);
+
+  function palette() {
+    return colorSets[level % colorSets.length];
+  }
+
+  function resetGame() {
+    stack = [{ x: W/2 - 90, w: 180, colorIdx: -1 }];
+    camY = 0; camTargetY = 0;
+    score = 0; level = 1; particles = []; shakeT = 0;
+    updateLevelUI();
+    spawnBlock();
+    running = true;
+    scoreEl.textContent = '0';
+  }
+
+  function spawnBlock() {
+    const top = stack[stack.length - 1];
+    speed = 3.0 + Math.min(score * 0.08, 5.5) + (level - 1) * 0.4;
+    dir = Math.random() < 0.5 ? -1 : 1;
+    const startX = dir === 1 ? -top.w : W;
+    const pal = palette();
+    current = { x: startX, w: top.w, colorIdx: Math.floor(Math.random() * pal.length) };
+  }
+
+  function updateLevelUI() {
+    levelBadge.textContent = 'שלב ' + level;
+    const progress = (score % 10) / 10 * 100;
+    levelFill.style.width = progress + '%';
+  }
+
+  function addCoins(n) {
+    totalCoins += n;
+    coinCountEl.textContent = totalCoins;
+    localStorage.setItem('sr_coins', totalCoins);
+  }
+
+  function drop() {
+    if (!running) return;
+    const top = stack[stack.length - 1];
+    const overlapStart = Math.max(current.x, top.x);
+    const overlapEnd = Math.min(current.x + current.w, top.x + top.w);
+    const overlapW = overlapEnd - overlapStart;
+
+    if (overlapW <= 4) { endGame(); return; }
+
+    const perfect = Math.abs((current.x + current.w/2) - (top.x + top.w/2)) < 6;
+    const newBlock = { x: overlapStart, w: perfect ? top.w : overlapW, colorIdx: current.colorIdx };
+
+    if (!perfect) {
+      if (current.x < overlapStart) spawnDebris(current.x, overlapStart - current.x, stack.length, current.colorIdx);
+      const rightEdge = current.x + current.w;
+      if (rightEdge > overlapEnd) spawnDebris(overlapEnd, rightEdge - overlapEnd, stack.length, current.colorIdx);
+    }
+
+    stack.push(newBlock);
+    score++;
+
+    if (score % 10 === 0) { level++; }
+    updateLevelUI();
+
+    scoreEl.textContent = score;
+    scoreEl.style.transform = 'translateX(-50%) scale(1.25)';
+    setTimeout(() => scoreEl.style.transform = 'translateX(-50%) scale(1)', 120);
+
+    if (perfect) {
+      showCombo('PERFECT! +2');
+      addCoins(2);
+      shakeT = 8;
+    } else {
+      addCoins(1);
+    }
+
+    camTargetY = Math.max(0, (stack.length - 5) * BLOCK_H);
+    spawnBlock();
+  }
+
+  function showCombo(text) {
+    comboEl.textContent = text;
+    comboEl.style.left = (W/2 - 70) + 'px';
+    comboEl.style.top = (H * 0.42) + 'px';
+    comboEl.style.opacity = '1';
+    comboEl.style.transform = 'translateY(0px)';
+    comboEl.style.transition = 'none';
+    requestAnimationFrame(() => {
+      comboEl.style.transition = 'all 0.6s ease-out';
+      comboEl.style.opacity = '0';
+      comboEl.style.transform = 'translateY(-30px)';
+    });
+  }
+
+  function spawnDebris(x, w, blockIndex, colorIdx) {
+    if (w <= 0) return;
+    particles.push({ x, w, y: blockIndex * BLOCK_H, vy: 0, vx: (Math.random()-0.5)*2, rot: 0, vrot: (Math.random()-0.5)*0.2, colorIdx, life: 90 });
+  }
+
+  function maybeShowAd(callback) {
+    if (premium) { callback(); return; }
+    runsSinceAd++;
+    localStorage.setItem('sr_runsSinceAd', runsSinceAd);
+    if (runsSinceAd < 2) { callback(); return; }
+    runsSinceAd = 0;
+    localStorage.setItem('sr_runsSinceAd', 0);
+    adOverlay.classList.remove('hidden');
+    let t = 3;
+    adTimer.textContent = 'סוגר בעוד ' + t + '...';
+    const iv = setInterval(() => {
+      t--;
+      if (t <= 0) {
+        clearInterval(iv);
+        adOverlay.classList.add('hidden');
+        callback();
+      } else {
+        adTimer.textContent = 'סוגר בעוד ' + t + '...';
+      }
+    }, 1000);
+  }
+
+  function endGame() {
+    running = false;
+    if (score > best) { best = score; localStorage.setItem('sr_best', best); }
+    maybeShowAd(() => {
+      overlay.innerHTML = `
+        <h1>נגמר המשחק</h1>
+        <div class="stat-row">
+          <div class="stat"><span class="num">${score}</span><span class="lbl">ניקוד</span></div>
+          <div class="stat"><span class="num">${best}</span><span class="lbl">שיא</span></div>
+        </div>
+        <button id="retry-btn" class="btn">נסה שוב</button>
+        ${!premium ? '<button id="premium-btn" class="btn btn-premium">הסר פרסומות – 9.90₪</button>' : ''}
+      `;
+      overlay.classList.remove('hidden');
+      document.getElementById('retry-btn').addEventListener('click', beginRun);
+      const pBtn = document.getElementById('premium-btn');
+      if (pBtn) pBtn.addEventListener('click', buyPremium);
+    });
+  }
+
+  function buyPremium() {
+    // Placeholder: real purchase flow happens via Google Play Billing after app is packaged
+    alert('זו הדגמה בלבד. לאחר עטיפת המשחק לאפליקציה, זה יתחבר ל-Google Play Billing האמיתי.');
+  }
+
+  shopBtn.addEventListener('click', buyPremium);
+
+  function beginRun() {
+    overlay.classList.add('hidden');
+    resetGame();
+    if (!animRunning) { animRunning = true; requestAnimationFrame(loop); }
+  }
+  startBtn.addEventListener('click', beginRun);
+
+  function handleInput(e) {
+    if (e) e.preventDefault();
+    if (!running) return;
+    drop();
+  }
+  canvas.addEventListener('pointerdown', handleInput);
+  window.addEventListener('keydown', (e) => { if (e.code === 'Space') handleInput(e); });
+
+  let animRunning = false;
+  function loop() {
+    if (running) {
+      current.x += speed * dir;
+      if (dir === 1 && current.x + current.w >= W) { current.x = W - current.w; dir = -1; }
+      if (dir === -1 && current.x <= 0) { current.x = 0; dir = 1; }
+    }
+    camY += (camTargetY - camY) * 0.12;
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.vy += 0.6; p.y += p.vy; p.x += p.vx; p.rot += p.vrot; p.life--;
+      if (p.life <= 0 || p.y + camY < -150) particles.splice(i, 1);
+    }
+
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  function render() {
+    const hueShift = Math.min(score * 1.5, 200);
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, `hsl(${250 - hueShift*0.3}, 55%, ${18 + hueShift*0.02}%)`);
+    g.addColorStop(1, `hsl(${20 + hueShift*0.1}, 70%, 55%)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    let shakeX = 0, shakeY = 0;
+    if (shakeT > 0) {
+      shakeX = (Math.random()-0.5) * shakeT;
+      shakeY = (Math.random()-0.5) * shakeT;
+      shakeT *= 0.8;
+      if (shakeT < 0.3) shakeT = 0;
+    }
+
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+    const baseY = H - 140;
+    const pal = palette();
+
+    for (let i = 0; i < stack.length; i++) {
+      const b = stack[i];
+      const y = baseY - i * BLOCK_H + camY;
+      if (y > H + 20 || y < -60) continue;
+      drawBlock(b.x, y, b.w, BLOCK_H, b.colorIdx, pal);
+    }
+
+    for (const p of particles) {
+      const y = baseY - p.y + camY;
+      ctx.save();
+      ctx.translate(p.x + p.w/2, y + BLOCK_H/2);
+      ctx.rotate(p.rot);
+      const c = pal[p.colorIdx % pal.length];
+      ctx.fillStyle = c[0];
+      ctx.fillRect(-p.w/2, -BLOCK_H/2, p.w, BLOCK_H);
+      ctx.restore();
+    }
+
+    if (running) {
+      const y = baseY - stack.length * BLOCK_H + camY;
+      drawBlock(current.x, y, current.w, BLOCK_H, current.colorIdx, pal);
+    }
+    ctx.restore();
+  }
+
+  function drawBlock(x, y, w, h, colorIdx, pal) {
+    if (colorIdx < 0) { ctx.fillStyle = '#3a3a52'; ctx.fillRect(x, y, w, h); return; }
+    const c = pal[colorIdx % pal.length];
+    const grad = ctx.createLinearGradient(0, y, 0, y + h);
+    grad.addColorStop(0, c[0]);
+    grad.addColorStop(1, c[1]);
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.fillRect(x, y, w, 5);
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, w, h);
+  }
+
+  resize();
+  render();
+})();
+</script>
+</body>
+</html>
